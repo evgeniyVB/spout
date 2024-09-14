@@ -256,6 +256,11 @@ EOD;
                 if ($style->shouldApplyCellAlignment()) {
                     $content .= \sprintf(' horizontal="%s"', $style->getCellAlignment());
                 }
+
+                if ($style->getCellVerticalAlignment()){
+                    $content .= \sprintf(' vertical="%s"', $style->getCellVerticalAlignment());
+                }
+
                 if ($style->shouldWrapText()) {
                     $content .= ' wrapText="1"';
                 }

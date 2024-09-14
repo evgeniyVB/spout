@@ -1,23 +1,5 @@
 # Spout
 
-[![Latest Stable Version](https://poser.pugx.org/box/spout/v/stable)](https://packagist.org/packages/box/spout)
-[![Project Status](https://opensource.box.com/badges/inactive.svg)](https://opensource.box.com/badges)
-[![example workflow](https://github.com/box/spout/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/box/spout/actions/workflows/ci.yml?query=branch%3Amaster)
-[![Coverage Status](https://coveralls.io/repos/github/box/spout/badge.svg?branch=master)](https://coveralls.io/github/box/spout?branch=master)
-[![Total Downloads](https://poser.pugx.org/box/spout/downloads)](https://packagist.org/packages/box/spout)
-
-## 🪦 Archived project 🪦 
-
-This project has been archived and is no longer maintained. No bug fix and no additional features will be added.<br>
-You won't be able to submit new issues or pull requests, and no additional features will be added
-
-You can still use Spout as is in your projects though :)
-
-> Thanks to everyone who contributed to this project, from a typo fix to the new cool feature.<br>
-> It was great to see the involvement of this community!
-
-<br>
-
 ## About
 
 Spout is a PHP library to read and write spreadsheet files (CSV, XLSX and ODS), in a fast and scalable way.
@@ -30,31 +12,116 @@ Join the community and come discuss Spout: [![Gitter](https://badges.gitter.im/J
 
 Full documentation can be found at [https://opensource.box.com/spout/](https://opensource.box.com/spout/).
 
-
 ## Requirements
 
 * PHP version 7.2 or higher
 * PHP extension `php_zip` enabled
 * PHP extension `php_xmlreader` enabled
 
-## Upgrade guide
+## Example
 
-Version 3 introduced new functionality but also some breaking changes. If you want to upgrade your Spout codebase from version 2 please consult the [Upgrade guide](UPGRADE-3.0.md). 
 
-## Running tests
+```php
 
-The `master` branch includes unit, functional and performance tests.
-If you just want to check that everything is working as expected, executing the unit and functional tests is enough.
+$pathToFile = __DIR__.'/excel.xlsx';
 
-* `phpunit` - runs unit and functional tests
-* `phpunit --group perf-tests` - only runs the performance tests
+$data = [
+   ['Данные юр. лица', '', '', 'Купленный товар', '', '', ''],
+   ['Наименование', 'ИНН', 'Адрес', 'Номенклатура', 'Количество', 'Цена, руб.', 'Дата оплаты', 'Сумма'],
+   ['ИП Кошкин', '00111122311', 'Москва ул. Ленина д.5', 'Принтер', 2, 100, '01.01.2024', '=ROUND(E3*F3,2)'],
+   ['ИП Собакин', '00111122421', 'Москва ул. Ленина д.6', 'Принтер', 3, 200, '02.01.2024', '=ROUND(E4*F4,2)'],
+   ['ИП Конов', '00111122533', 'Москва ул. Ленина д.7', 'Принтер', 1, 300, '03.01.2024', '=ROUND(E5*F5,2)'],
+   ['ИП Медведев', '00111122644', 'Москва ул. Ленина д.8', 'Принтер', 5, 400, '04.01.2024', '=ROUND(E6*F6,2)'],
+   [null, null, null, null, null, null, null, '=SUM(H3:H6)'],
+];
 
-For information, the performance tests take about 10 minutes to run (processing 1 million rows files is not a quick thing).
+$border = (new BorderBuilder())
+   ->setBorderBottom(Color::BLACK, Border::WIDTH_THIN, Border::STYLE_SOLID)
+   ->setBorderTop(Color::BLACK, Border::WIDTH_THIN, Border::STYLE_SOLID)
+   ->setBorderLeft(Color::BLACK, Border::WIDTH_THIN, Border::STYLE_SOLID)
+   ->setBorderRight(Color::BLACK, Border::WIDTH_THIN, Border::STYLE_SOLID)
+   ->build();
 
-## Support
+$defaultStyle = (new StyleBuilder())
+   ->setFontSize(11)
+   ->setFontName('Calibri')
+   ->setShouldWrapText()
+   ->setCellAlignment(CellAlignment::CENTER)
+   ->setCellVerticalAlignment(CellVerticalAlignment::MIDDLE)
+   ->setBorder($border)
+   ->build();
 
-Spout is no longer actively supported. You can still ask questions, or discuss about it in the chat room:<br>
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/box/spout?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+$writer = WriterEntityFactory::createXLSXWriter();
+$writer->setDefaultRowStyle($defaultStyle);
+$writer->setFreezePane('A3');
+$writer->openToFile($pathToFile);
+
+$writer->getCurrentSheet()->setAutoFilter('A2:H6');
+
+$row = 0;
+foreach ($data as $item){
+   $cells = []; $col=0;
+   foreach ($item as $v) {
+
+       if ($col < 3) $color = 'FBFCEB';
+       elseif ($col < 6) $color = 'D4DFED';
+       else $color = 'DDD7E7';
+
+       $style =
+           (new StyleBuilder())
+           ->setBackgroundColor($color)
+           ->build();
+
+       if ($row==0){
+           $style = null;
+       }
+
+
+       if ($style){
+           if (in_array($col, [0,2,3]) && $row>1){
+               $style->setCellAlignment(CellAlignment::LEFT);
+           }
+
+           if (in_array($col, [5,7])) {
+               $style->setFormat('0.00');
+           }
+           elseif (in_array($col, [4])) {
+               $style->setFormat('0');
+           }
+           elseif (in_array($col, [1,6])) {
+               $style->setFormat('@');
+           }
+
+           if ($row==6) {
+               $style->setBackgroundColor(null);
+           }
+
+       }
+
+       $cells[] = WriterEntityFactory::createCell($v, $style);
+       $col++;
+   }
+
+   $singleRow = WriterEntityFactory::createRow($cells);
+   $writer->addRow($singleRow);
+   $row++;
+}
+
+
+$writer->getCurrentSheet()->mergeCells('A1:C1');
+$writer->getCurrentSheet()->mergeCells('D1:F1');
+
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('A', 18));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('B', 18));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('C', 25));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('D', 18));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('E', 18));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('F', 18));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('G', 18));
+$writer->getCurrentSheet()->addColumnDimension(new ColumnDimension('H', 18));
+
+$writer->close();
+```
 
 ## Copyright and License
 

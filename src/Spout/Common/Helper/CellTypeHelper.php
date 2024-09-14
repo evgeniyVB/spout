@@ -41,6 +41,15 @@ class CellTypeHelper
     }
 
     /**
+     * @param mixed $value
+     * @return bool
+     */
+    public static function isFormula($value)
+    {
+        return is_string($value) && isset($value[0]) && $value[0] === '=';
+    }
+
+    /**
      * Returns whether the given value is boolean.
      * "true"/"false" and 0/1 are not booleans.
      *

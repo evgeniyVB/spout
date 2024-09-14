@@ -314,8 +314,33 @@ EOD;
 
         $workbookXmlFileContents .= <<<'EOD'
     </sheets>
-</workbook>
 EOD;
+
+        $definedNames = [];
+        foreach ($worksheets as $worksheet) {
+            $sheetIndex = $worksheet->getId();
+            $worksheetName = $worksheet->getExternalSheet()->getName();
+
+            if ($worksheet->getExternalSheet()->getAutoFilter()){
+                if (preg_match('/(\w+)(\d+):(\w+)(\d+)/', $worksheet->getExternalSheet()->getAutoFilter(), $matches)){
+                    $definedNames[] = sprintf('<definedName function="false" hidden="true" localSheetId="%s" name="_xlnm._FilterDatabase" vbProcedure="false">%s!$%s$%s:$%s$%s</definedName>', $sheetIndex-1, $worksheetName, $matches[1], $matches[2], $matches[3], $matches[4]);
+                }
+            }
+        }
+
+        if (sizeof($definedNames)>0){
+            $workbookXmlFileContents .= '<definedNames>';
+        }
+
+        foreach ($definedNames as $definedName){
+            $workbookXmlFileContents .= $definedName;
+        }
+
+        if (sizeof($definedNames)>0){
+            $workbookXmlFileContents .= '</definedNames>';
+        }
+
+        $workbookXmlFileContents .= '</workbook>';
 
         $this->createFileWithContents($this->xlFolder, self::WORKBOOK_XML_FILE_NAME, $workbookXmlFileContents);
 

@@ -47,4 +47,15 @@ class Writer extends WriterMultiSheetsAbstract
 
         return $this;
     }
+
+    /**
+     * @param $cell
+     * @return $this
+     */
+    public function setFreezePane($cell)
+    {
+        $this->optionsManager->setOption(Options::FREEZE_PANE, $cell);
+        return $this;
+    }
+
 }

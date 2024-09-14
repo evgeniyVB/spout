@@ -4,6 +4,7 @@ namespace Box\Spout\Writer\Common\Creator\Style;
 
 use Box\Spout\Common\Entity\Style\Border;
 use Box\Spout\Common\Entity\Style\CellAlignment;
+use Box\Spout\Common\Entity\Style\CellVerticalAlignment;
 use Box\Spout\Common\Entity\Style\Style;
 use Box\Spout\Common\Exception\InvalidArgumentException;
 
@@ -139,6 +140,25 @@ class StyleBuilder
         }
 
         $this->style->setCellAlignment($cellAlignment);
+
+        return $this;
+    }
+
+    /**
+     * Sets the cell alignment.
+     *
+     * @param string $cellAlignment The cell alignment
+     *
+     * @throws InvalidArgumentException If the given cell alignment is not valid
+     * @return StyleBuilder
+     */
+    public function setCellVerticalAlignment($cellAlignment)
+    {
+        if (!CellVerticalAlignment::isValid($cellAlignment)) {
+            throw new InvalidArgumentException('Invalid cell alignment value');
+        }
+
+        $this->style->setCellVerticalAlignment($cellAlignment);
 
         return $this;
     }

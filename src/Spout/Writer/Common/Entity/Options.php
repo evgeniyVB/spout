@@ -20,4 +20,5 @@ abstract class Options
 
     // XLSX specific options
     public const SHOULD_USE_INLINE_STRINGS = 'shouldUseInlineStrings';
+    public const FREEZE_PANE = 'freezePane';
 }

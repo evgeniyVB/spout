@@ -9,9 +9,9 @@ namespace Box\Spout\Common\Entity\Style;
 class Style
 {
     /** Default values */
-    public const DEFAULT_FONT_SIZE = 11;
-    public const DEFAULT_FONT_COLOR = Color::BLACK;
-    public const DEFAULT_FONT_NAME = 'Arial';
+    const DEFAULT_FONT_SIZE = 11;
+    const DEFAULT_FONT_COLOR = Color::BLACK;
+    const DEFAULT_FONT_NAME = 'Arial';
 
     /** @var int|null Style ID */
     private $id;
@@ -58,6 +58,8 @@ class Style
     private $shouldApplyCellAlignment = false;
     /** @var string Cell alignment */
     private $cellAlignment;
+    /** @var string Cell alignment */
+    private $cellVerticalAlignment;
     /** @var bool Whether the cell alignment property was set */
     private $hasSetCellAlignment = false;
 
@@ -66,7 +68,7 @@ class Style
     /** @var bool Whether the wrap text property was set */
     private $hasSetWrapText = false;
 
-    /** @var Border|null */
+    /** @var Border */
     private $border;
 
     /** @var bool Whether border properties should be applied */
@@ -78,7 +80,7 @@ class Style
     /** @var bool */
     private $hasSetBackgroundColor = false;
 
-    /** @var string|null Format */
+    /** @var string Format */
     private $format;
 
     /** @var bool */
@@ -110,7 +112,7 @@ class Style
     }
 
     /**
-     * @return Border|null
+     * @return Border
      */
     public function getBorder()
     {
@@ -370,6 +372,26 @@ class Style
     }
 
     /**
+     * @return string
+     */
+    public function getCellVerticalAlignment()
+    {
+        return $this->cellVerticalAlignment;
+    }
+
+    /**
+     * @param string $cellAlignment The cell alignment
+     *
+     * @return Style
+     */
+    public function setCellVerticalAlignment($cellAlignment)
+    {
+        $this->cellVerticalAlignment = $cellAlignment;
+        $this->isEmpty = false;
+        return $this;
+    }
+
+    /**
      * @return bool
      */
     public function hasSetCellAlignment()
@@ -467,7 +489,7 @@ class Style
     }
 
     /**
-     * @return string|null
+     * @return string
      */
     public function getFormat()
     {

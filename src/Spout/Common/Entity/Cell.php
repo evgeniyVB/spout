@@ -151,6 +151,9 @@ class Cell
         if (CellTypeHelper::isDateTimeOrDateInterval($value)) {
             return self::TYPE_DATE;
         }
+        if (CellTypeHelper::isFormula($value)) {
+            return self::TYPE_FORMULA;
+        }        
         if (CellTypeHelper::isNonEmptyString($value)) {
             return self::TYPE_STRING;
         }
@@ -206,6 +209,14 @@ class Cell
         return $this->type === self::TYPE_ERROR;
     }
 
+    /**
+     * @return bool
+     */
+    public function isFormula()
+    {
+        return $this->type === self::TYPE_FORMULA;
+    }
+    
     /**
      * @return string
      */

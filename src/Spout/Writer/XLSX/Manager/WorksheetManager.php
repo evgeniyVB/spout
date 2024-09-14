@@ -31,15 +31,20 @@ class WorksheetManager implements WorksheetManagerInterface
      * @see https://support.office.com/en-us/article/Excel-specifications-and-limits-1672b34d-7043-467e-8e27-269d656771c3 [Excel 2010]
      * @see https://support.office.com/en-us/article/Excel-specifications-and-limits-ca36e2dc-1f09-4620-b726-67c00b05040f [Excel 2013/2016]
      */
-    public const MAX_CHARACTERS_PER_CELL = 32767;
+    const MAX_CHARACTERS_PER_CELL = 32767;
 
-    public const SHEET_XML_FILE_HEADER = <<<'EOD'
+    const SHEET_XML_FILE_HEADER = <<<'EOD'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 EOD;
 
     /** @var bool Whether inline or shared strings should be used */
     protected $shouldUseInlineStrings;
+
+    /**
+     * @var string|null
+     */
+    protected $freezePane;
 
     /** @var RowManager Manages rows */
     private $rowManager;
@@ -58,6 +63,11 @@ EOD;
 
     /** @var StringHelper String helper */
     private $stringHelper;
+
+    /**
+     * @var int[] Max length by column, used for auto size
+     */
+    private $columnsMaxTextLength = [];
 
     /**
      * WorksheetManager constructor.
@@ -86,6 +96,7 @@ EOD;
         $this->sharedStringsManager = $sharedStringsManager;
         $this->stringsEscaper = $stringsEscaper;
         $this->stringHelper = $stringHelper;
+        $this->freezePane = $optionsManager->getOption(Options::FREEZE_PANE);
     }
 
     /**
@@ -107,6 +118,21 @@ EOD;
         $worksheet->setFilePointer($sheetFilePointer);
 
         \fwrite($sheetFilePointer, self::SHEET_XML_FILE_HEADER);
+
+        if ($this->freezePane){
+            if (preg_match('/\d+/iu', $this->freezePane, $matches)) {
+                $xml = '<sheetViews>';
+                    $xml .= '<sheetView showFormulas="false" showGridLines="true" showRowColHeaders="true" showZeros="true" rightToLeft="false" tabSelected="true" showOutlineSymbols="true" defaultGridColor="true" view="normal" topLeftCell="A1" colorId="64" zoomScale="100" zoomScaleNormal="100" zoomScalePageLayoutView="100" workbookViewId="0">';
+                        $xSplit = CellHelper::getColumnToIndexFromCellIndex($this->freezePane);
+                        $ySplit = $matches[0]-1;
+                        $xml .= sprintf('<pane topLeftCell="%s" xSplit="%s" ySplit="%s" activePane="bottomLeft" state="frozen"/>', $this->freezePane, $xSplit, $ySplit);
+                        $xml .= '<selection sqref="A1" activeCell="A1" pane="topLeft"/>';
+                    $xml .= '</sheetView>';
+                $xml .= '</sheetViews>';
+                fwrite($sheetFilePointer, $xml);
+            }
+        }
+
         \fwrite($sheetFilePointer, '<sheetData>');
     }
 
@@ -211,6 +237,43 @@ EOD;
         return new RegisteredStyle($registeredStyle, $isMatchingRowStyle);
     }
 
+
+    /**
+     * @return int[]
+     *
+     */
+    public function getColumnsMaxTextLength()
+    {
+        return $this->columnsMaxTextLength;
+    }
+
+    /**
+     * Increment max length for column
+     * @param string $columnIndex
+     * @param string $text
+     * @return string
+     */
+    protected function setColumnMaxCharacters($columnIndex, $text)
+    {
+
+        if (strpos($text, "\n") !== false) {
+            $lineTexts = explode("\n", $text);
+            $lineWidths = array();
+            foreach ($lineTexts as $lineText) {
+                $lineWidths[] = StringHelper::getStringLength($lineText);
+            }
+            $length = max($lineWidths); // width of longest line in cell
+        } else {
+            $length = StringHelper::getStringLength($text);
+        }
+
+        if (!isset($this->columnsMaxTextLength[$columnIndex]))
+            $this->columnsMaxTextLength[$columnIndex] = $length;
+        else
+            $this->columnsMaxTextLength[$columnIndex] = max($this->columnsMaxTextLength[$columnIndex], $length);
+        return $text;
+    }
+
     /**
      * Builds and returns xml for a single cell.
      *
@@ -234,6 +297,8 @@ EOD;
             $cellXML .= ' t="b"><v>' . (int) ($cell->getValue()) . '</v></c>';
         } elseif ($cell->isNumeric()) {
             $cellXML .= '><v>' . $this->stringHelper->formatNumericValue($cell->getValue()) . '</v></c>';
+        } elseif ($cell->isFormula()) {
+            $cellXML .= '><f>' . substr($cell->getValue(), 1) . '</f></c>';
         } elseif ($cell->isError() && is_string($cell->getValueEvenIfError())) {
             // only writes the error value if it's a string
             $cellXML .= ' t="e"><v>' . $cell->getValueEvenIfError() . '</v></c>';
@@ -287,6 +352,63 @@ EOD;
         }
 
         \fwrite($worksheetFilePointer, '</sheetData>');
+
+        $sheet = $worksheet->getExternalSheet();
+
+        if ($sheet->getAutoFilter() !== null) {
+            fwrite($worksheetFilePointer, ' <autoFilter ref="' . $sheet->getAutoFilter() . '"></autoFilter>'.PHP_EOL);
+        }
+
+        if (count($sheet->getMergeCells()) > 0) {
+            fwrite($worksheetFilePointer, '<mergeCells>'.PHP_EOL);
+            foreach ($sheet->getMergeCells() as $mergeCell) {
+                fwrite($worksheetFilePointer, "\t".' <mergeCell ref="' . $mergeCell . '"/>'.PHP_EOL);
+            }
+            fwrite($worksheetFilePointer, '</mergeCells>'.PHP_EOL);
+        }
+
+        if (count($sheet->getColumnDimensions())) {
+            fwrite($worksheetFilePointer, '<cols>'.PHP_EOL);
+
+            $sheet->calculateColumnWidths($this->getColumnsMaxTextLength(), null);
+
+            foreach ($sheet->getColumnDimensions() as $columnDimension) {
+                $cellIndex = CellHelper::getColumnToIndexFromCellIndex($columnDimension->getColumnIndex()) + 1;
+                $attributes = [
+                    'min' => $cellIndex,
+                    'max' => $cellIndex,
+                    'width' => $columnDimension->getWidth() + ($sheet->getAutoFilter() !== null ? 2 : 0),
+                    'customWidth' => 'true'
+                ];
+
+                if ($columnDimension->getVisible() == false) {
+                    $attributes['hidden'] = 'true';
+                }
+
+                if ($columnDimension->getAutoSize()) {
+                    $attributes['bestFit'] = 'true';
+                }
+
+                if ($columnDimension->getCollapsed() == true) {
+                    $attributes['collapsed'] = 'true';
+                }
+
+                if ($columnDimension->getOutlineLevel() > 0) {
+                    $attributes['outlineLevel'] = $columnDimension->getOutlineLevel();
+                }
+
+                $xml = '';
+                foreach($attributes as $k => $v) {
+                    $xml .= $k.'="'.$v.'" ';
+                }
+
+                fwrite($worksheetFilePointer, "\t".'<col '.$xml.' />'.PHP_EOL);
+            }
+
+            fwrite($worksheetFilePointer, '</cols>'.PHP_EOL);
+        }
+
+
         \fwrite($worksheetFilePointer, '</worksheet>');
         \fclose($worksheetFilePointer);
     }
